@@ -46,7 +46,7 @@ jobs:
           else
             BASE="HEAD^"
           fi
-          FILES=$(git diff --name-only "$BASE"...HEAD -- configs | tr '\n' ' ' | xargs)
+          FILES=$(git diff --name-only "$BASE"...HEAD -- changedfiles | tr '\n' ' ' | xargs)
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           if [ -z "$FILES" ]; then
             echo "No config changes detected; exiting early."
