@@ -51,10 +51,11 @@ jobs:
         if: steps.changed.outputs.any_changed == 'true'
         run: |
           set -euo pipefail
-          files="${{ steps.changed.outputs.all_changed_files }}"
+          # Include added/modified plus deleted/renamed entries so CHANGED_FILES covers all statuses.
+          files="${{ steps.changed.outputs.all_changed_files }} ${{ steps.changed.outputs.deleted_files }} ${{ steps.changed.outputs.renamed_files }}"
           echo "Detected config file changes:"
           printf '%s\n' "$files"
-          spaced=$(printf '%s' "$files" | tr '\n' ' ' | xargs)
+          spaced=$(printf '%s\n' $files | awk 'NF' | sort -u | tr '\n' ' ' | xargs)
           echo "changed_files=$spaced" >> "$GITHUB_OUTPUT"
           echo "CHANGED_FILES=$spaced" >> "$GITHUB_ENV"
 
