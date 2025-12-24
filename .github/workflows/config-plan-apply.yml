@@ -3,10 +3,10 @@ name: Config Plan and Apply
 on:
   push:
     paths:
-      - "changedfiles/**"
+      - "configs/**"
   pull_request:
     paths:
-      - "changedfiles/**"
+      - "configs/**"
   workflow_dispatch:
 
 env:
@@ -46,7 +46,7 @@ jobs:
           else
             BASE="HEAD^"
           fi
-          FILES=$(git diff --name-only "$BASE"...HEAD -- changedfiles | tr '\n' ' ' | xargs)
+          FILES=$(git diff --name-only "$BASE"...HEAD -- configs | tr '\n' ' ' | xargs)
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           if [ -z "$FILES" ]; then
             echo "No config changes detected; exiting early."
@@ -95,6 +95,10 @@ jobs:
           if [ -n "$JAVA_HOME" ] && [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
             sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
           fi
+          keytool -importcert -noprompt -alias cosmos-emulator -file emulatorcert.crt -keystore "$GITHUB_WORKSPACE/cosmos-emulator.jks" -storepass changeit
+          {
+            echo "JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=$GITHUB_WORKSPACE/cosmos-emulator.jks -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
+          } >> "$GITHUB_ENV"
 
       - name: Stage changed files
         if: steps.changed.outputs.files != ''
@@ -123,7 +127,6 @@ jobs:
         env:
           CHANGED_FILES: ${{ steps.changed.outputs.files }}
           PROGRAM_PARAMETERS: --plan
-          JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=$JAVA_HOME/lib/security/cacerts -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
         shell: bash
         run: |
           set -euo pipefail
@@ -231,6 +234,10 @@ jobs:
           if [ -n "$JAVA_HOME" ] && [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
             sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
           fi
+          keytool -importcert -noprompt -alias cosmos-emulator -file emulatorcert.crt -keystore "$GITHUB_WORKSPACE/cosmos-emulator.jks" -storepass changeit
+          {
+            echo "JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=$GITHUB_WORKSPACE/cosmos-emulator.jks -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
+          } >> "$GITHUB_ENV"
 
       - name: Stage changed files
         shell: bash
@@ -256,7 +263,6 @@ jobs:
         env:
           CHANGED_FILES: ${{ needs.plan.outputs.changed-files }}
           PROGRAM_PARAMETERS: --apply
-          JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=$JAVA_HOME/lib/security/cacerts -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
         shell: bash
         run: |
           set -euo pipefail
