@@ -1,4 +1,4 @@
-name: Config Plan & Apply
+name: Config Plan & Apply Workflow
 
 on:
   push:
