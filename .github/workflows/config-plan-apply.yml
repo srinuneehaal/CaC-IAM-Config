@@ -92,6 +92,9 @@ jobs:
           done
           sudo cp emulatorcert.crt /usr/local/share/ca-certificates/cosmos-emulator.crt
           sudo update-ca-certificates
+          if [ -n "$JAVA_HOME" ] && [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
+            sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
+          fi
 
       - name: Stage changed files
         if: steps.changed.outputs.files != ''
@@ -224,6 +227,9 @@ jobs:
           done
           sudo cp emulatorcert.crt /usr/local/share/ca-certificates/cosmos-emulator.crt
           sudo update-ca-certificates
+          if [ -n "$JAVA_HOME" ] && [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
+            sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
+          fi
 
       - name: Stage changed files
         shell: bash
