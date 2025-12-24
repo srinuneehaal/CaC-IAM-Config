@@ -90,12 +90,17 @@ jobs:
             fi
             sleep 2
           done
+          if ! grep -q "BEGIN CERTIFICATE" emulatorcert.crt; then
+            echo "Failed to obtain emulator certificate from emulator."
+            exit 1
+          fi
+          openssl x509 -in emulatorcert.crt -out emulatorcert.pem
           sudo cp emulatorcert.crt /usr/local/share/ca-certificates/cosmos-emulator.crt
           sudo update-ca-certificates
           if [ -n "$JAVA_HOME" ] && [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
-            sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
+            sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.pem -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
           fi
-          keytool -importcert -noprompt -alias cosmos-emulator -file emulatorcert.crt -keystore "$GITHUB_WORKSPACE/cosmos-emulator.jks" -storepass changeit
+          keytool -importcert -noprompt -alias cosmos-emulator -file emulatorcert.pem -keystore "$GITHUB_WORKSPACE/cosmos-emulator.jks" -storepass changeit || true
           {
             echo "JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=$GITHUB_WORKSPACE/cosmos-emulator.jks -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
           } >> "$GITHUB_ENV"
@@ -229,12 +234,17 @@ jobs:
             fi
             sleep 2
           done
+          if ! grep -q "BEGIN CERTIFICATE" emulatorcert.crt; then
+            echo "Failed to obtain emulator certificate from emulator."
+            exit 1
+          fi
+          openssl x509 -in emulatorcert.crt -out emulatorcert.pem
           sudo cp emulatorcert.crt /usr/local/share/ca-certificates/cosmos-emulator.crt
           sudo update-ca-certificates
           if [ -n "$JAVA_HOME" ] && [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
-            sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.crt -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
+            sudo keytool -importcert -noprompt -trustcacerts -alias cosmos-emulator -file emulatorcert.pem -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit || true
           fi
-          keytool -importcert -noprompt -alias cosmos-emulator -file emulatorcert.crt -keystore "$GITHUB_WORKSPACE/cosmos-emulator.jks" -storepass changeit
+          keytool -importcert -noprompt -alias cosmos-emulator -file emulatorcert.pem -keystore "$GITHUB_WORKSPACE/cosmos-emulator.jks" -storepass changeit || true
           {
             echo "JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=$GITHUB_WORKSPACE/cosmos-emulator.jks -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
           } >> "$GITHUB_ENV"
