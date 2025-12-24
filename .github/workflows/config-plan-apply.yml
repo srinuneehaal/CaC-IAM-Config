@@ -1,0 +1,180 @@
+name: Config Plan & Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'configs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  CHANGED_FILES_DIR: configs
+  PLAN_DIR: plan
+  MASTER_PLAN_FILE: masterplan.json
+  MASTER_PLAN_REPORT_ENABLED: true
+  CAC_IAM_REPO: srinuneehaal/CaC-IAM
+  CAC_IAM_WORKFLOW: build.yml
+  CAC_IAM_BRANCH: main
+  CAC_IAM_ARTIFACT_NAME: java-artifacts
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.changed.outputs.any_changed }}
+      changed_files: ${{ steps.export.outputs.changed_files }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect config changes
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          since_last_remote_commit: true
+          files: |
+            configs/**
+
+      - name: Note no config changes
+        if: steps.changed.outputs.any_changed != 'true'
+        run: echo "No config changes detected; skipping plan/apply."
+
+      - name: Export changed file list
+        id: export
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          set -euo pipefail
+          files="${{ steps.changed.outputs.all_changed_files }}"
+          echo "Detected config file changes:"
+          printf '%s\n' "$files"
+          spaced=$(printf '%s' "$files" | tr '\n' ' ' | xargs)
+          echo "changed_files=$spaced" >> "$GITHUB_OUTPUT"
+          echo "CHANGED_FILES=$spaced" >> "$GITHUB_ENV"
+
+      - name: Download CaC-IAM CLI artifact
+        if: steps.changed.outputs.any_changed == 'true'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          github_token: ${{ secrets.CAC_IAM_ARTIFACT_TOKEN || secrets.GITHUB_TOKEN }}
+          repo: ${{ env.CAC_IAM_REPO }}
+          workflow: ${{ env.CAC_IAM_WORKFLOW }}
+          branch: ${{ env.CAC_IAM_BRANCH }}
+          workflow_conclusion: success
+          name: ${{ env.CAC_IAM_ARTIFACT_NAME }}
+          path: cac-iam-build
+
+      - name: Locate CaC-IAM jar
+        if: steps.changed.outputs.any_changed == 'true'
+        id: jar
+        run: |
+          set -euo pipefail
+          jar=$(find "cac-iam-build" -type f -name "cac-iam-*.jar" ! -name "original-*.jar" | head -n 1)
+          if [ -z "$jar" ]; then
+            jar=$(find "cac-iam-build" -type f -name "*.jar" | head -n 1)
+          fi
+          if [ -z "$jar" ]; then
+            echo "No jar found in downloaded artifact" >&2
+            ls -R cac-iam-build || true
+            exit 1
+          fi
+          echo "path=$jar" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 21
+        if: steps.changed.outputs.any_changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Generate master plan
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          set -euo pipefail
+          java -jar "${{ steps.jar.outputs.path }}" --plan
+        env:
+          AZURE_COSMOS_KEY: ${{ secrets.AZURE_COSMOS_KEY }}
+          AZURE_COSMOS_URI: ${{ secrets.AZURE_COSMOS_URI }}
+          AZURE_COSMOS_DATABASE: ${{ secrets.AZURE_COSMOS_DATABASE }}
+          AZURE_COSMOS_CONTAINER: ${{ secrets.AZURE_COSMOS_CONTAINER }}
+          CHANGED_FILES: ${{ steps.export.outputs.changed_files }}
+          CHANGED_FILES_DIR: ${{ env.CHANGED_FILES_DIR }}
+          MASTER_PLAN_FILE: ${{ env.MASTER_PLAN_FILE }}
+          MASTER_PLAN_REPORT_ENABLED: ${{ env.MASTER_PLAN_REPORT_ENABLED }}
+          PLAN_DIR: ${{ env.PLAN_DIR }}
+
+      - name: Upload master plan artifact
+        if: steps.changed.outputs.any_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: masterplan
+          path: ${{ format('{0}/{1}', env.PLAN_DIR, env.MASTER_PLAN_FILE) }}
+
+  apply:
+    needs: plan
+    if: needs.plan.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download CaC-IAM CLI artifact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          github_token: ${{ secrets.CAC_IAM_ARTIFACT_TOKEN || secrets.GITHUB_TOKEN }}
+          repo: ${{ env.CAC_IAM_REPO }}
+          workflow: ${{ env.CAC_IAM_WORKFLOW }}
+          branch: ${{ env.CAC_IAM_BRANCH }}
+          workflow_conclusion: success
+          name: ${{ env.CAC_IAM_ARTIFACT_NAME }}
+          path: cac-iam-build
+
+      - name: Locate CaC-IAM jar
+        id: jar
+        run: |
+          set -euo pipefail
+          jar=$(find "cac-iam-build" -type f -name "cac-iam-*.jar" ! -name "original-*.jar" | head -n 1)
+          if [ -z "$jar" ]; then
+            jar=$(find "cac-iam-build" -type f -name "*.jar" | head -n 1)
+          fi
+          if [ -z "$jar" ]; then
+            echo "No jar found in downloaded artifact" >&2
+            ls -R cac-iam-build || true
+            exit 1
+          fi
+          echo "path=$jar" >> "$GITHUB_OUTPUT"
+
+      - name: Download master plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: masterplan
+          path: ${{ env.PLAN_DIR }}
+
+      - name: Apply master plan
+        run: |
+          set -euo pipefail
+          java -jar "${{ steps.jar.outputs.path }}" --apply
+        env:
+          AZURE_COSMOS_KEY: ${{ secrets.AZURE_COSMOS_KEY }}
+          AZURE_COSMOS_URI: ${{ secrets.AZURE_COSMOS_URI }}
+          AZURE_COSMOS_DATABASE: ${{ secrets.AZURE_COSMOS_DATABASE }}
+          AZURE_COSMOS_CONTAINER: ${{ secrets.AZURE_COSMOS_CONTAINER }}
+          CHANGED_FILES: ${{ needs.plan.outputs.changed_files }}
+          CHANGED_FILES_DIR: ${{ env.CHANGED_FILES_DIR }}
+          MASTER_PLAN_FILE: ${{ env.MASTER_PLAN_FILE }}
+          MASTER_PLAN_REPORT_ENABLED: ${{ env.MASTER_PLAN_REPORT_ENABLED }}
+          PLAN_DIR: ${{ env.PLAN_DIR }}
