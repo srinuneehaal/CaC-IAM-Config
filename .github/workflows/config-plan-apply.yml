@@ -16,7 +16,7 @@ env:
   MASTER_PLAN_FILE: masterplan.json
   MASTER_PLAN_REPORT_ENABLED: "true"
   PLAN_DIR: plan
-  ARTIFACT_ENTRYPOINT: ./your-artifact-entrypoint # adjust to the real executable inside the downloaded artifact
+  ARTIFACT_ENTRYPOINT: auto # set to "auto" to autodetect, or a relative/absolute path inside the artifact
   ARTIFACT_RUN_BRANCH: main
 
 jobs:
@@ -116,22 +116,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ENTRYPOINT_PATH=$ARTIFACT_ENTRYPOINT
-          if [ "${ENTRYPOINT_PATH:0:1}" != "/" ]; then
-            # Resolve relative entrypoint within the unpacked artifact
-            CANDIDATE=$(find artifact_unpacked -maxdepth 3 -type f -path "*/${ENTRYPOINT_PATH#./}")
-            if [ -n "$CANDIDATE" ]; then
-              ENTRYPOINT_PATH="$CANDIDATE"
+          detect_entrypoint() {
+            local target="$1"
+            if [ "$target" != "auto" ]; then
+              if [ "${target:0:1}" != "/" ]; then
+                local candidate
+                candidate=$(find artifact_unpacked -maxdepth 4 -type f -path "*/${target#./}" | head -n 1 || true)
+                [ -n "$candidate" ] && echo "$candidate" && return 0
+              fi
+              [ -f "$target" ] && echo "$target" && return 0
+              return 1
             fi
-          fi
-          if [ ! -f "$ENTRYPOINT_PATH" ]; then
-            echo "Entrypoint '$ARTIFACT_ENTRYPOINT' not found inside artifact_unpacked. Update ARTIFACT_ENTRYPOINT."
+            find artifact_unpacked -maxdepth 4 -type f \( -name "*.sh" -o -name "*.ps1" -o -name "*.jar" -o -name "*cacia*" -o -name "*CaC-IAM*" \) | head -n 1
+          }
+
+          ENTRYPOINT_PATH=$(detect_entrypoint "$ARTIFACT_ENTRYPOINT")
+          if [ -z "$ENTRYPOINT_PATH" ] || [ ! -f "$ENTRYPOINT_PATH" ]; then
+            echo "Entrypoint '$ARTIFACT_ENTRYPOINT' not found inside artifact_unpacked. Set ARTIFACT_ENTRYPOINT to the executable path."
+            echo "Contents of artifact_unpacked:"
+            find artifact_unpacked -maxdepth 3 -type f
             exit 1
           fi
-          chmod +x "$ENTRYPOINT_PATH"
+
           WORKDIR=$(dirname "$ENTRYPOINT_PATH")
+          BASENAME=$(basename "$ENTRYPOINT_PATH")
+
           pushd "$WORKDIR" >/dev/null
-          "./$(basename "$ENTRYPOINT_PATH")" $PROGRAM_PARAMETERS
+          if [[ "$BASENAME" == *.jar ]]; then
+            java -jar "$BASENAME" $PROGRAM_PARAMETERS
+          else
+            chmod +x "$BASENAME"
+            "./$BASENAME" $PROGRAM_PARAMETERS
+          fi
           if [ ! -f "$PLAN_DIR/$MASTER_PLAN_FILE" ]; then
             echo "Expected plan at $PLAN_DIR/$MASTER_PLAN_FILE not found."
             exit 1
@@ -223,21 +239,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ENTRYPOINT_PATH=$ARTIFACT_ENTRYPOINT
-          if [ "${ENTRYPOINT_PATH:0:1}" != "/" ]; then
-            CANDIDATE=$(find artifact_unpacked -maxdepth 3 -type f -path "*/${ENTRYPOINT_PATH#./}")
-            if [ -n "$CANDIDATE" ]; then
-              ENTRYPOINT_PATH="$CANDIDATE"
+          detect_entrypoint() {
+            local target="$1"
+            if [ "$target" != "auto" ]; then
+              if [ "${target:0:1}" != "/" ]; then
+                local candidate
+                candidate=$(find artifact_unpacked -maxdepth 4 -type f -path "*/${target#./}" | head -n 1 || true)
+                [ -n "$candidate" ] && echo "$candidate" && return 0
+              fi
+              [ -f "$target" ] && echo "$target" && return 0
+              return 1
             fi
-          fi
-          if [ ! -f "$ENTRYPOINT_PATH" ]; then
-            echo "Entrypoint '$ARTIFACT_ENTRYPOINT' not found inside artifact_unpacked. Update ARTIFACT_ENTRYPOINT."
+            find artifact_unpacked -maxdepth 4 -type f \( -name "*.sh" -o -name "*.ps1" -o -name "*.jar" -o -name "*cacia*" -o -name "*CaC-IAM*" \) | head -n 1
+          }
+
+          ENTRYPOINT_PATH=$(detect_entrypoint "$ARTIFACT_ENTRYPOINT")
+          if [ -z "$ENTRYPOINT_PATH" ] || [ ! -f "$ENTRYPOINT_PATH" ]; then
+            echo "Entrypoint '$ARTIFACT_ENTRYPOINT' not found inside artifact_unpacked. Set ARTIFACT_ENTRYPOINT to the executable path."
+            echo "Contents of artifact_unpacked:"
+            find artifact_unpacked -maxdepth 3 -type f
             exit 1
           fi
-          chmod +x "$ENTRYPOINT_PATH"
+
           WORKDIR=$(dirname "$ENTRYPOINT_PATH")
+          BASENAME=$(basename "$ENTRYPOINT_PATH")
           mkdir -p "$WORKDIR/$PLAN_DIR"
           cp "$GITHUB_WORKSPACE/$PLAN_DIR/$MASTER_PLAN_FILE" "$WORKDIR/$PLAN_DIR/$MASTER_PLAN_FILE"
           pushd "$WORKDIR" >/dev/null
-          "./$(basename "$ENTRYPOINT_PATH")" $PROGRAM_PARAMETERS
+          if [[ "$BASENAME" == *.jar ]]; then
+            java -jar "$BASENAME" $PROGRAM_PARAMETERS
+          else
+            chmod +x "$BASENAME"
+            "./$BASENAME" $PROGRAM_PARAMETERS
+          fi
           popd >/dev/null
