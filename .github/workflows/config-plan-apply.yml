@@ -12,7 +12,7 @@ on:
 env:
   AZURE_COSMOS_KEY: "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
   AZURE_COSMOS_URI: https://localhost:8081
-  CHANGED_FILES_DIR: configs
+  CHANGED_FILES_DIR: changedfiles
   MASTER_PLAN_FILE: masterplan.json
   MASTER_PLAN_REPORT_ENABLED: "true"
   PLAN_DIR: plan
@@ -123,6 +123,7 @@ jobs:
         env:
           CHANGED_FILES: ${{ steps.changed.outputs.files }}
           PROGRAM_PARAMETERS: --plan
+          JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=$JAVA_HOME/lib/security/cacerts -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
         shell: bash
         run: |
           set -euo pipefail
@@ -255,6 +256,7 @@ jobs:
         env:
           CHANGED_FILES: ${{ needs.plan.outputs.changed-files }}
           PROGRAM_PARAMETERS: --apply
+          JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=$JAVA_HOME/lib/security/cacerts -Djavax.net.ssl.trustStorePassword=changeit -Dio.netty.handler.ssl.noOpenSsl=true"
         shell: bash
         run: |
           set -euo pipefail
