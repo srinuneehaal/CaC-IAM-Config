@@ -1,6 +1,6 @@
 {
   "code": "allow-access-read-policy",
-  "description": "Example policy demonstrating their creation update",
+  "description": "New Example policy demonstrating their creation update",
   "applications": [
     "LUSID"
   ],
