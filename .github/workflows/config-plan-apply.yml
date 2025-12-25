@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
   actions: write
+  pages: write
+  id-token: write
 
 env:
   CHANGED_FILES_DIR: configs
@@ -28,6 +30,8 @@ jobs:
     outputs:
       has_changes: ${{ steps.export.outputs.has_changes }}
       changed_files: ${{ steps.export.outputs.changed_files }}
+      has_items: ${{ steps.plan_meta.outputs.has_items }}
+      report_found: ${{ steps.report.outputs.found }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -173,6 +177,30 @@ jobs:
     steps:
       - name: Await approval to apply
         run: echo "Plan generated; awaiting approval to proceed to apply."
+
+  publish-report:
+    needs: plan
+    if: needs.plan.outputs.has_items == 'true' && needs.plan.outputs.report_found == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download master plan report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: masterplan-report
+          path: report
+          if-no-artifact-found: ignore
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: report
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
 
   apply:
     needs:
