@@ -116,6 +116,47 @@ jobs:
           MASTER_PLAN_REPORT_ENABLED: ${{ env.MASTER_PLAN_REPORT_ENABLED }}
           PLAN_DIR: ${{ env.PLAN_DIR }}
 
+      - name: Check plan items
+        id: plan_meta
+        if: steps.export.outputs.has_changes == 'true'
+        run: |
+          set -euo pipefail
+          plan_file="${{ env.PLAN_DIR }}/${{ env.MASTER_PLAN_FILE }}"
+          items=$(jq '.items | length' "$plan_file")
+          echo "items=$items" >> "$GITHUB_OUTPUT"
+          if [ "$items" -gt 0 ]; then
+            echo "has_items=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_items=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Locate master plan report
+        id: report
+        if: steps.plan_meta.outputs.has_items == 'true'
+        run: |
+          set -euo pipefail
+          path="${{ env.PLAN_DIR }}/masterplan.html"
+          if [ -f "$path" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "path=$path" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Master plan report not found at $path"
+          fi
+
+      - name: Upload master plan report
+        id: upload_report
+        if: steps.report.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: masterplan-report
+          path: ${{ steps.report.outputs.path }}
+
+      - name: Publish report link
+        if: steps.upload_report.outputs.artifact-url != ''
+        run: |
+          echo "Master plan report: [download](${{ steps.upload_report.outputs.artifact-url }})" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload master plan artifact
         if: steps.export.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
