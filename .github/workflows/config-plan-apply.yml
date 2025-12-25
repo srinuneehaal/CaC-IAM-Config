@@ -39,6 +39,8 @@ jobs:
         uses: tj-actions/changed-files@v45
         with:
           since_last_remote_commit: true
+          include_deleted_files: true
+          include_renamed_files: true
           files: |
             configs/**
 
@@ -117,8 +119,20 @@ jobs:
           name: masterplan
           path: ${{ format('{0}/{1}', env.PLAN_DIR, env.MASTER_PLAN_FILE) }}
 
-  apply:
+  approval:
     needs: plan
+    if: needs.plan.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: apply-approval
+    steps:
+      - name: Await approval to apply
+        run: echo "Plan generated; awaiting approval to proceed to apply."
+
+  apply:
+    needs:
+      - plan
+      - approval
     if: needs.plan.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     steps:
