@@ -26,7 +26,7 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
-      has_changes: ${{ steps.changed.outputs.any_changed }}
+      has_changes: ${{ steps.export.outputs.has_changes }}
       changed_files: ${{ steps.export.outputs.changed_files }}
     steps:
       - name: Checkout repository
@@ -44,13 +44,8 @@ jobs:
           files: |
             configs/**
 
-      - name: Note no config changes
-        if: steps.changed.outputs.any_changed != 'true'
-        run: echo "No config changes detected; skipping plan/apply."
-
       - name: Export changed file list
         id: export
-        if: steps.changed.outputs.any_changed == 'true'
         run: |
           set -euo pipefail
           # Include added/modified plus deleted/renamed entries so CHANGED_FILES covers all statuses.
@@ -58,11 +53,20 @@ jobs:
           echo "Detected config file changes:"
           printf '%s\n' "$files"
           spaced=$(printf '%s\n' $files | awk 'NF' | sort -u | tr '\n' ' ' | xargs)
+          has_changes=false
+          if [ -n "$spaced" ]; then
+            has_changes=true
+            echo "CHANGED_FILES=$spaced" >> "$GITHUB_ENV"
+          fi
           echo "changed_files=$spaced" >> "$GITHUB_OUTPUT"
-          echo "CHANGED_FILES=$spaced" >> "$GITHUB_ENV"
+          echo "has_changes=$has_changes" >> "$GITHUB_OUTPUT"
+
+      - name: Note no config changes
+        if: steps.export.outputs.has_changes != 'true'
+        run: echo "No config changes detected; skipping plan/apply."
 
       - name: Download CaC-IAM CLI artifact
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.export.outputs.has_changes == 'true'
         uses: dawidd6/action-download-artifact@v3
         with:
           github_token: ${{ secrets.CAC_IAM_ARTIFACT_TOKEN || secrets.GITHUB_TOKEN }}
@@ -74,7 +78,7 @@ jobs:
           path: cac-iam-build
 
       - name: Locate CaC-IAM jar
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.export.outputs.has_changes == 'true'
         id: jar
         run: |
           set -euo pipefail
@@ -90,14 +94,14 @@ jobs:
           echo "path=$jar" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 21
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.export.outputs.has_changes == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Generate master plan
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.export.outputs.has_changes == 'true'
         run: |
           set -euo pipefail
           java -jar "${{ steps.jar.outputs.path }}" --plan
@@ -113,7 +117,7 @@ jobs:
           PLAN_DIR: ${{ env.PLAN_DIR }}
 
       - name: Upload master plan artifact
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.export.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: masterplan
