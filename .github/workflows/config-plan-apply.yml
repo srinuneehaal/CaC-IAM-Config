@@ -193,6 +193,17 @@ jobs:
           path: report
           if-no-artifact-found: ignore
 
+      - name: Add index page
+        run: |
+          set -euo pipefail
+          if [ -f "report/masterplan.html" ]; then
+            cp report/masterplan.html report/index.html
+            echo "Created index.html for GitHub Pages"
+          else
+            echo "masterplan.html not found in report/; nothing to publish" >&2
+            exit 1
+          fi
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
